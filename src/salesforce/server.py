@@ -7,11 +7,12 @@
 # ///
 import asyncio
 import json
+import re
 from typing import Any, Optional
 import os
 from dotenv import load_dotenv
 
-from simple_salesforce import Salesforce
+from simple_salesforce import SFType, Salesforce
 from simple_salesforce.exceptions import SalesforceError
 
 import mcp.types as types
@@ -43,6 +44,17 @@ class SalesforceClient:
             print(f"Salesforce connection failed: {str(e)}")
             return False
     
+    def get_object(self, object_name: str) -> SFType:
+        """Resolve a Salesforce object without dispatching to client attributes."""
+        if not self.sf:
+            raise ValueError("Salesforce connection not established.")
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", object_name):
+            raise ValueError("Invalid Salesforce object name")
+        sf_object = getattr(self.sf, object_name, None)
+        if not isinstance(sf_object, SFType):
+            raise ValueError("Invalid Salesforce object name")
+        return sf_object
+
     def get_object_fields(self, object_name: str) -> str:
         """Retrieves field Names, labels and typesfor a specific Salesforce object.
 
@@ -55,7 +67,7 @@ class SalesforceClient:
         if not self.sf:
             raise ValueError("Salesforce connection not established.")
         if object_name not in self.sobjects_cache:
-            sf_object = getattr(self.sf, object_name)
+            sf_object = self.get_object(object_name)
             fields = sf_object.describe()['fields']
             filtered_fields = []
             for field in fields:
@@ -344,9 +356,7 @@ async def handle_call_tool(name: str, arguments: dict[str, str]) -> list[types.T
         record_id = arguments.get("record_id")
         if not object_name or not record_id:
             raise ValueError("Missing 'object_name' or 'record_id' argument")
-        if not sf_client.sf:
-            raise ValueError("Salesforce connection not established.")
-        sf_object = getattr(sf_client.sf, object_name)
+        sf_object = sf_client.get_object(object_name)
         results = sf_object.get(record_id)
         return [
             types.TextContent(
@@ -359,9 +369,7 @@ async def handle_call_tool(name: str, arguments: dict[str, str]) -> list[types.T
         data = arguments.get("data")
         if not object_name or not data:
             raise ValueError("Missing 'object_name' or 'data' argument")
-        if not sf_client.sf:
-            raise ValueError("Salesforce connection not established.")
-        sf_object = getattr(sf_client.sf, object_name)
+        sf_object = sf_client.get_object(object_name)
         results = sf_object.create(data)
         return [
             types.TextContent(
@@ -375,9 +383,7 @@ async def handle_call_tool(name: str, arguments: dict[str, str]) -> list[types.T
         data = arguments.get("data")
         if not object_name or not record_id or not data:
             raise ValueError("Missing 'object_name', 'record_id', or 'data' argument")
-        if not sf_client.sf:
-            raise ValueError("Salesforce connection not established.")
-        sf_object = getattr(sf_client.sf, object_name)
+        sf_object = sf_client.get_object(object_name)
         results = sf_object.update(record_id, data)
         return [
             types.TextContent(
@@ -390,9 +396,7 @@ async def handle_call_tool(name: str, arguments: dict[str, str]) -> list[types.T
         record_id = arguments.get("record_id")
         if not object_name or not record_id:
             raise ValueError("Missing 'object_name' or 'record_id' argument")
-        if not sf_client.sf:
-            raise ValueError("Salesforce connection not established.")
-        sf_object = getattr(sf_client.sf, object_name)
+        sf_object = sf_client.get_object(object_name)
         results = sf_object.delete(record_id)
         return [
             types.TextContent(
